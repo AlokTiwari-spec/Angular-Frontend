@@ -17,7 +17,7 @@ else
 fi
 
 # Upload the new version
-aws s3 cp $BUILD_PATH/ s3://$AWS_S3_BUCKET/v$NEW_VERSION/ --recursive
+#aws s3 cp $BUILD_PATH/ s3://$AWS_S3_BUCKET/v$NEW_VERSION/ --recursive
 UPLOAD_STATUS=$?
 
 # Check if the upload was successful

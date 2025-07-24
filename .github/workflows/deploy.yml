@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '22'
+          node-version: '22'  # Using LTS version instead of 22
 
       - name: Install dependencies
         run: npm install
@@ -30,6 +30,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Check for existing versions
+        id: check_versions
+        run: |
+          HAS_VERSIONS=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ | grep -v latest || true)
+          echo "has_versions=${HAS_VERSIONS}" >> $GITHUB_OUTPUT
+
       - name: Generate Build ID
         run: echo "BUILD_ID=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
 
@@ -42,13 +48,24 @@ jobs:
           echo "Deploying version ${{ env.BUILD_ID }}"
 
       - name: Rollback on Failure
-        if: steps.deploy.outcome == 'failure'
+        if: steps.deploy.outcome == 'failure' && steps.check_versions.outputs.has_versions != ''
         run: |
-          PREVIOUS_VERSION=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ --recursive | sort | tail -n 2 | head -n 1 | awk '{print $4}' | cut -d/ -f1)
+          PREVIOUS_VERSION=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ | grep -v latest | sort | tail -n 1 | awk '{print $2}' | sed 's/\///g')
           if [ ! -z "$PREVIOUS_VERSION" ]; then
             aws s3 cp s3://${{ secrets.S3_BUCKET }}/$PREVIOUS_VERSION/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
             echo "Rolled back to previous version: $PREVIOUS_VERSION"
-          else
-            echo "No previous version found for rollback"
+          fi
+
+      - name: Deployment Status
+        if: always()
+        run: |
+          if [ "${{ steps.deploy.outcome }}" == "success" ]; then
+            echo "Deployment successful"
+            exit 0
+          elif [ -z "${{ steps.check_versions.outputs.has_versions }}" ]; then
+            echo "First-time deployment failed. Please check your application and try again."
+            exit 1
+          elif [ "${{ steps.deploy.outcome }}" == "failure" ]; then
+            echo "Deployment failed, but successfully rolled back to previous version"
             exit 1
           fi

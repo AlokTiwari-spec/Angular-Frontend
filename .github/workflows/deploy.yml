@@ -3,7 +3,7 @@ name: Deploy to AWS S3
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   deploy:
@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '22'  # Using LTS version instead of 22
+          node-version: '18'
 
       - name: Install dependencies
         run: npm install
@@ -30,42 +30,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Check for existing versions
-        id: check_versions
-        run: |
-          HAS_VERSIONS=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ | grep -v latest || true)
-          echo "has_versions=${HAS_VERSIONS}" >> $GITHUB_OUTPUT
+      - name: Make deploy script executable
+        run: chmod +x ./scripts/deploy-to-s3.sh
 
-      - name: Generate Build ID
-        run: echo "BUILD_ID=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
-
-      - name: Deploy
+      - name: Deploy to S3
         id: deploy
-        continue-on-error: true
-        run: |
-          aws s3 cp dist/browser/ s3://${{ secrets.S3_BUCKET }}/${{ env.BUILD_ID }} --recursive
-          aws s3 cp dist/browser/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
-          echo "Deploying version ${{ env.BUILD_ID }}"
-
-      - name: Rollback on Failure
-        if: steps.deploy.outcome == 'failure' && steps.check_versions.outputs.has_versions != ''
-        run: |
-          PREVIOUS_VERSION=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ | grep -v latest | sort | tail -n 1 | awk '{print $2}' | sed 's/\///g')
-          if [ ! -z "$PREVIOUS_VERSION" ]; then
-            aws s3 cp s3://${{ secrets.S3_BUCKET }}/$PREVIOUS_VERSION/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
-            echo "Rolled back to previous version: $PREVIOUS_VERSION"
-          fi
-
-      - name: Deployment Status
-        if: always()
-        run: |
-          if [ "${{ steps.deploy.outcome }}" == "success" ]; then
-            echo "Deployment successful"
-            exit 0
-          elif [ -z "${{ steps.check_versions.outputs.has_versions }}" ]; then
-            echo "First-time deployment failed. Please check your application and try again."
-            exit 1
-          elif [ "${{ steps.deploy.outcome }}" == "failure" ]; then
-            echo "Deployment failed, but successfully rolled back to previous version"
-            exit 1
-          fi
+        env:
+          AWS_S3_BUCKET: ${{ secrets.S3_BUCKET }}
+        run: ./scripts/deploy-to-s3.sh

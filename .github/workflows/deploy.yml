@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: Build
-        run: npm run build
+        run: npm run build -- --configuration=production
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -37,14 +37,14 @@ jobs:
         id: deploy
         continue-on-error: true
         run: |
-          aws s3 cp dist/login-app/ s3://${{ secrets.S3_BUCKET }}/${{ env.BUILD_ID }} --recursive
-          aws s3 cp dist/login-app/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
+          aws s3 cp dist/browser/ s3://${{ secrets.S3_BUCKET }}/${{ env.BUILD_ID }} --recursive
+          aws s3 cp dist/browser/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
           echo "Deploying version ${{ env.BUILD_ID }}"
 
       - name: Rollback on Failure
         if: steps.deploy.outcome == 'failure'
         run: |
-          PREVIOUS_VERSION=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ --recursive | sort | tail -n 2 | head -n 1 | awk '{print $4}')
+          PREVIOUS_VERSION=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ --recursive | sort | tail -n 2 | head -n 1 | awk '{print $4}' | cut -d/ -f1)
           if [ ! -z "$PREVIOUS_VERSION" ]; then
             aws s3 cp s3://${{ secrets.S3_BUCKET }}/$PREVIOUS_VERSION/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
             echo "Rolled back to previous version: $PREVIOUS_VERSION"

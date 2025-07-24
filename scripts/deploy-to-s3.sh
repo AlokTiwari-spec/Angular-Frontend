@@ -15,7 +15,7 @@ aws s3 cp $BUILD_PATH/ s3://$AWS_S3_BUCKET/$TIMESTAMP/ --recursive
 UPLOAD_STATUS=$?
 
 # Check if the upload was successful
-if [ $UPLOAD_STATUS -eq 0 ]; then
+if [ $UPLOAD_STATUS -eq 1 ]; then
     # Update the latest version
     aws s3 cp $BUILD_PATH/ s3://$AWS_S3_BUCKET/ --recursive
     echo "Successfully deployed version $TIMESTAMP"

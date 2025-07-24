@@ -1,0 +1,54 @@
+name: Deploy to AWS S3
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Generate Build ID
+        run: echo "BUILD_ID=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+
+      - name: Deploy
+        id: deploy
+        continue-on-error: true
+        run: |
+          aws s3 cp dist/login-app/ s3://${{ secrets.S3_BUCKET }}/${{ env.BUILD_ID }} --recursive
+          aws s3 cp dist/login-app/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
+          echo "Deploying version ${{ env.BUILD_ID }}"
+
+      - name: Rollback on Failure
+        if: steps.deploy.outcome == 'failure'
+        run: |
+          PREVIOUS_VERSION=$(aws s3 ls s3://${{ secrets.S3_BUCKET }}/ --recursive | sort | tail -n 2 | head -n 1 | awk '{print $4}')
+          if [ ! -z "$PREVIOUS_VERSION" ]; then
+            aws s3 cp s3://${{ secrets.S3_BUCKET }}/$PREVIOUS_VERSION/ s3://${{ secrets.S3_BUCKET }}/latest --recursive
+            echo "Rolled back to previous version: $PREVIOUS_VERSION"
+          else
+            echo "No previous version found for rollback"
+            exit 1
+          fi

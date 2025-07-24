@@ -12,7 +12,7 @@ BUILD_PATH="dist/login-app"
 aws s3 cp $BUILD_PATH/ s3://$AWS_S3_BUCKET/temp/ --recursive
 UPLOAD_STATUS=$?
 
-if [ $UPLOAD_STATUS -eq 0 ]; then
+if [ $UPLOAD_STATUS -eq 1 ]; then
     # Upload was successful, now get the latest version number
     LATEST_VERSION=$(aws s3 ls s3://$AWS_S3_BUCKET/ | grep -v index.html | grep -o '^.*v[0-9]\+/' | grep -o '[0-9]\+' | sort -n | tail -n 1)
     if [ -z "$LATEST_VERSION" ]; then
